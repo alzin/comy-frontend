@@ -4,6 +4,7 @@ import { API_URL } from "../utils/apiUtils";
 
 const useSocket = (users, selectedUserId, currentSystemUser) => {
   const [socket, setSocket] = useState(null);
+  // const API_URL = process.env.REACT_APP_BACKEND_URL
 
   useEffect(() => {
     const socketInstance = io(API_URL, {
