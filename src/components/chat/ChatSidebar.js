@@ -16,6 +16,7 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
       try {
         const res = await axios.get(`${API_URL}/api/chats`, { withCredentials: true });
         const allChats = res.data;
+        // console.log('Fetched chats:', allChats);
 
         const getBotId = () => {
           const botChat = allChats.find(chat => chat.name === "COMY オフィシャル AI");
@@ -41,6 +42,8 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
             latestMessage: chat.latestMessage?.content || 'メッセージはありません ',
             latestTime: chat.latestMessage?.createdAt || chat.updatedAt,
             profileImageUrl: otherUser?.image || '',
+            unReadMessage: chat.id === selectedChatId ? false : !chat.latestMessage?.readBy.includes(currentSystemUserId)
+
           };
         });
 
@@ -62,11 +65,20 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
     if (!socket) return;
 
     const handleMessageUpdate = (message) => {
-      const { chatId, content, createdAt } = message;
+      const { chatId, content, createdAt, readBy } = message;
+      console.log('chatId', chatId);
+      console.log('selectedChatId', selectedChatId);
+
+      console.log('Received :', chatId === selectedChatId ? false : !readBy.includes(currentSystemUserId));
       setChats(prev =>
         prev.map(chat =>
           chat.id === chatId
-            ? { ...chat, latestMessage: content, latestTime: createdAt }
+            ? {
+              ...chat,
+              latestMessage: content,
+              latestTime: createdAt,
+              unReadMessage: chatId === selectedChatId ? false : !readBy.includes(currentSystemUserId)
+            }
             : chat
         )
       );
@@ -75,11 +87,12 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
     socket.on('receive_message', handleMessageUpdate);
     socket.on('newMessage', handleMessageUpdate);
 
+    // Clean up both listeners
     return () => {
       socket.off('receive_message', handleMessageUpdate);
       socket.off('newMessage', handleMessageUpdate);
     };
-  }, [socket]);
+  }, [socket, selectedChatId, currentSystemUserId]);
 
   const formatTime = (timeString) => {
     if (!timeString) return '';
@@ -88,14 +101,27 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
   };
 
   const getOtherUserId = (chat) => {
+    // Bot ID - you might need to adjust this based on your actual bot ID
+    // const botId = "681547798892749fbe910c02"; // Update this with your actual bot ID
+
+    // Filter out current user and bot to find the other user
     const otherUsers = chat.users.filter(user =>
       user.id !== currentSystemUserId && user.id !== botId
     );
+
     return otherUsers.length > 0 ? otherUsers[0].id : null;
   };
 
   const handleUserSelect = (chatId, chat) => {
     const isBot = chat.name === "COMY オフィシャル AI";
+    const newChants = chats.map(c =>
+      c.id === chat.id
+        ? { ...c, unReadMessage: false }
+        : c
+    );
+    setChats(newChants);
+    console.log("chats", newChants)
+
     const chatInfo = {
       ...chat,
       profileImageUrl: isBot ? botImage : (chat.profileImageUrl || "/images/profileImage.png")
@@ -113,11 +139,19 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
     onSelectUser(chatId, chatInfo);
   };
 
+  useEffect(() => {
+    if (socket) {
+      for (const chat of chats) {
+        socket.emit('joinChat', chat.id);
+      }
+    }
+  }, [socket, chats]);
+
   return (
     <aside className="sidebarV2">
       {chats.map((chat) => {
         const isBot = chat.name === 'COMY オフィシャル AI';
-        const showBotNotification = isBot;
+        // const showBotNotification = isBot;
 
         return (
           <div
@@ -149,7 +183,7 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
               </div>
               <p className="previewTextV2">{chat.latestMessage}</p>
             </div>
-            {showBotNotification && <div className="notificationDotV2" />}
+            {chat.unReadMessage && <div className="notificationDotV2" />}
           </div>
         );
       })}
