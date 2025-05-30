@@ -17,12 +17,12 @@ const ChatMain = ({
   chatInfo,
   onRefreshSidebar,
   showProfile,
+  setSelectedSenderId,
 }) => {
   const socket = useContext(SocketContext);
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [currentUser, setCurrentUser] = useState([]);
-  // console.log(currentSystemUser)
 
   // useEffect(() => {
   //   if (socket && selectedChatId) {
@@ -37,18 +37,17 @@ const ChatMain = ({
       try {
         const response = await secureApi.get(`/api/chats/${selectedChatId}/messages`);
         const allMessages = response.data;
-        console.log("sssssss", allMessages)
 
-        const matchCards = allMessages
-          .filter(m => m.isMatchCard)
-          .map(m => {
-            const wasResponded = allMessages.some(other =>
-              other.chatId === m.chatId &&
-              !other.isMatchCard &&
-              new Date(other.createdAt) > new Date(m.createdAt)
-            );
+        const sortedMessages = [...allMessages].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
 
-            return {
+        const matchCards = [];
+        const otherMessages = [];
+
+        sortedMessages.forEach(m => {
+          if (m.isMatchCard) {
+            matchCards.push({
               id: m.id,
               text: [m.content],
               profileImageUrl: m.suggestedUserProfileImageUrl || "/images/profileImage.png",
@@ -56,35 +55,22 @@ const ChatMain = ({
               currentUserName: currentSystemUser?.name,
               currentUserImage: currentSystemUser?.profileImageUrl || "/images/profileImage.png",
               chatId: selectedChatId,
-              isResponded: wasResponded,
-              apiType: m.content.includes("マッチの希望が届いています") ? "match" : "suggestion",
+              isResponded: m.status !== 'pending',
+              apiType: m.isSuggested ? "suggestion" : "match",
               suggestedUserName: m.suggestedUserName,
               suggestedUserCategory: m.suggestedUserCategory,
               status: m.status || 'pending',
-              isSuggested: m.isSuggested || false
-            };
-          });
+              isSuggested: m.isSuggested || false,
+              relatedUserId: m.relatedUserId
+            });
+          } else {
+            const isBot = m.senderName === "COMY オフィシャル AI";
+            const isCurrentUser = currentSystemUser?.userId === m.senderId;
 
-        const otherMessages = allMessages
-          .filter(m => !m.isMatchCard)
-          .map(m => {
-            const senderName = m.senderName;
-            const senderId = m.senderId;
-            const isBot = senderName === "COMY オフィシャル AI";
-
-            const isUserMatchResponse =
-              m.content === "マッチを希望する" &&
-              senderId === currentSystemUser?.id;
-
-            const isCurrentUser =
-              isUserMatchResponse ||
-              (currentSystemUser?.userId === senderId && !isBot);
-            console.log(m)
-
-            return {
+            otherMessages.push({
               id: m.id,
-              sender: senderName,
-              senderId: senderId || senderName,
+              sender: m.senderName,
+              senderId: m.senderId || m.senderName,
               text: m.content,
               timestamp: new Date(m.createdAt).toLocaleTimeString([], {
                 hour: "2-digit",
@@ -93,23 +79,28 @@ const ChatMain = ({
               }),
               rawTimestamp: m.createdAt,
               isUser: isCurrentUser,
-              profileImageUrl: isBot ? botImage : m.senderProfileImageUrl ? m.senderProfileImageUrl : "/images/profileImage.png",
+              profileImageUrl: isBot ? botImage : (m.senderProfileImageUrl || "/images/profileImage.png"),
               isMatchCard: false
-            };
-          });
+            });
+          }
+        });
 
-        console.log("otherMessages", otherMessages)
+        const lastMatchCard = [...matchCards].reverse().find(m => m.relatedUserId);
+        if (lastMatchCard) {
+          setSelectedSenderId(lastMatchCard.relatedUserId);
+        }
+
         setCurrentUser(matchCards);
         setMessages(otherMessages);
       } catch (error) {
-        console.error("Failed to fetch messages:", error);
         setCurrentUser([]);
         setMessages([]);
+        console.error("Error fetching messages:", error);
       }
     };
 
     fetchMessages();
-  }, [selectedChatId]);
+  }, [selectedChatId, currentSystemUser?.userId, currentSystemUser?.name, currentSystemUser?.profileImageUrl, setSelectedSenderId]);
 
   useEffect(() => {
     if (!socket) return;
@@ -133,7 +124,7 @@ const ChatMain = ({
       socket.off('userTyping', handleUserTyping);
       socket.off('userStoppedTyping', handleUserStoppedTyping);
     };
-  }, [socket, selectedChatId, currentSystemUser]);
+  }, [socket, selectedChatId, currentSystemUser?.userId]);
 
   useEffect(() => {
     if (!socket || !selectedChatId) return;
@@ -141,7 +132,7 @@ const ChatMain = ({
     const handleNewMessage = (msg) => {
       if (msg.chatId !== selectedChatId) return;
 
-      if (msg.isMatchCard || msg.content?.includes("マッチの希望が届いています")) {
+      if (msg.isMatchCard) {
         const card = {
           id: msg.id,
           text: [msg.content],
@@ -151,12 +142,17 @@ const ChatMain = ({
           currentUserImage: currentSystemUser?.profileImageUrl || "/images/profileImage.png",
           chatId: msg.chatId,
           isResponded: msg.status !== 'pending',
-          apiType: msg.content.includes("マッチの希望が届いています") ? "match" : "suggestion",
+          apiType: msg.isSuggested ? "suggestion" : "match",
           suggestedUserName: msg.suggestedUserName || "Unknown",
           suggestedUserCategory: msg.suggestedUserCategory || "N/A",
           status: msg.status || 'pending',
-          isSuggested: msg.isSuggested || false
+          isSuggested: msg.isSuggested || false,
+          relatedUserId: msg.relatedUserId
         };
+
+        if (card.relatedUserId) {
+          setSelectedSenderId(card.relatedUserId);
+        }
 
         setCurrentUser(prev => {
           const exists = prev.some(m => m.id === card.id);
@@ -170,8 +166,8 @@ const ChatMain = ({
       setMessages(prev => {
         const exists = prev.some(m => m.id === msg.id);
         if (exists) return prev;
-        const isBot = msg.senderName === "COMY オフィシャル AI";
 
+        const isBot = msg.senderName === "COMY オフィシャル AI";
         const formatted = {
           id: msg.id,
           sender: msg.senderName,
@@ -184,17 +180,20 @@ const ChatMain = ({
           }),
           rawTimestamp: msg.createdAt,
           isUser: msg.senderId === currentSystemUser?.userId,
-          profileImageUrl: isBot ? botImage : msg.senderProfileImageUrl ? msg.senderProfileImageUrl : "/images/profileImage.png",
+          profileImageUrl: isBot ? botImage : (msg.senderProfileImageUrl || "/images/profileImage.png"),
           isMatchCard: false
         };
 
-        return [...prev, formatted];
+        const updatedMessages = [...prev, formatted].sort(
+          (a, b) => new Date(a.rawTimestamp).getTime() - new Date(b.rawTimestamp).getTime()
+        );
+        return updatedMessages;
       });
     };
 
     socket.on('newMessage', handleNewMessage);
     return () => socket.off('newMessage', handleNewMessage);
-  }, [socket, selectedChatId, currentSystemUser]);
+  }, [socket, selectedChatId, currentSystemUser?.userId, currentSystemUser?.name, currentSystemUser?.profileImageUrl, setSelectedSenderId]);
 
 
   const handleSendMessage = async (text) => {
@@ -203,29 +202,22 @@ const ChatMain = ({
       chatId: selectedChatId,
       content: text.trim(),
       senderId: currentSystemUser?.userId,
-      // senderName: currentSystemUser.name,
       timestamp: new Date().toISOString()
     };
 
     try {
-      // Send message via socket
       socket.emit('sendMessage', messageData);
-      console.log("Message emitted successfully");
-
-      // Emit typing status
       socket.emit('typing', {
         chatId: selectedChatId,
         userId: currentSystemUser?.userId
       });
 
-      // Stop typing after delay
       setTimeout(() => {
         socket.emit('stopTyping', {
           chatId: selectedChatId,
           userId: currentSystemUser?.userId
         });
       }, 1000);
-
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -233,18 +225,14 @@ const ChatMain = ({
 
   const isBotChat = chatInfo?.name === "COMY オフィシャル AI";
 
-  console.log(messages)
-
   return (
-    <section className={`${showProfile ? "mainChantWithProfile" : "mainChat"}`}>
+    <section className={showProfile ? "mainChantWithProfile" : "mainChat"}>
       {currentUser.length > 0 || messages.length > 0 ? (
         <>
           <ChatHeader
             currentUser={{
               name: chatInfo?.name ?? "",
-              profileImageUrl: chatInfo?.name === "COMY オフィシャル AI"
-                ? botImage
-                : chatInfo?.profileImageUrl || "/images/profileImage.png"
+              profileImageUrl: isBotChat ? botImage : (chatInfo?.profileImageUrl || "/images/profileImage.png")
             }}
             onBackClick={onBackClick}
             isMobileView={isMobileView}
@@ -259,7 +247,14 @@ const ChatMain = ({
                   onRefreshSidebar?.();
                   return;
                 }
-                setMessages((prev) => [...prev, msg]);
+                setMessages((prev) => {
+                  const exists = prev.some(m => m.id === msg.id);
+                  if (exists) return prev;
+                  const updatedMessages = [...prev, msg].sort(
+                    (a, b) => new Date(a.rawTimestamp).getTime() - new Date(b.rawTimestamp).getTime()
+                  );
+                  return updatedMessages;
+                });
               }}
             />
             <MessageInput

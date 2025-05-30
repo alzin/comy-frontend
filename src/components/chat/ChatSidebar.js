@@ -16,14 +16,13 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
       try {
         const res = await axios.get(`${API_URL}/api/chats`, { withCredentials: true });
         const allChats = res.data;
-        console.log('Fetched chats:', allChats);
+        // console.log('Fetched chats:', allChats);
 
-        // Get bot ID dynamically from the first bot chat
         const getBotId = () => {
           const botChat = allChats.find(chat => chat.name === "COMY オフィシャル AI");
           if (botChat && botChat.users) {
-            const botUserId = botChat.users.find(id => id !== currentSystemUserId);
-            return botUserId;
+            const botUser = botChat.users.find(user => user.role === "bot");
+            return botUser ? botUser.id : null;
           }
           return null;
         };
@@ -31,16 +30,23 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
         const dynamicBotId = getBotId();
         setBotId(dynamicBotId);
 
-        const formatted = allChats.map(chat => ({
-          id: chat.id,
-          name: chat.name || 'Private Chat',
-          users: chat.users,
-          latestMessage: chat.latestMessage?.content || 'メッセージはありません ',
-          latestTime: chat.latestMessage?.createdAt || chat.updatedAt,
-          profileImageUrl: chat.profileImageUrl || '',
-          unReadMessage: chat.id === selectedChatId ? false : !chat.latestMessage?.readBy.includes(currentSystemUserId)
-        }));
-        console.log('Fetched chats:', formatted);
+        const formatted = allChats.map(chat => {
+          const otherUser = chat.users.find(user =>
+            user.id !== currentSystemUserId && user.role !== "bot"
+          );
+
+          return {
+            id: chat.id,
+            name: chat.name || 'Private Chat',
+            users: chat.users,
+            latestMessage: chat.latestMessage?.content || 'メッセージはありません ',
+            latestTime: chat.latestMessage?.createdAt || chat.updatedAt,
+            profileImageUrl: otherUser?.image || '',
+            unReadMessage: chat.id === selectedChatId ? false : !chat.latestMessage?.readBy.includes(currentSystemUserId)
+
+          };
+        });
+
         setChats(formatted);
       } catch (err) {
         console.error('Failed to load chats:', err);
@@ -78,7 +84,6 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
       );
     };
 
-    // Listen for both received and sent messages
     socket.on('receive_message', handleMessageUpdate);
     socket.on('newMessage', handleMessageUpdate);
 
@@ -100,23 +105,22 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
     // const botId = "681547798892749fbe910c02"; // Update this with your actual bot ID
 
     // Filter out current user and bot to find the other user
-    const otherUsers = chat.users.filter(userId =>
-      userId !== currentSystemUserId && userId !== botId
+    const otherUsers = chat.users.filter(user =>
+      user.id !== currentSystemUserId && user.id !== botId
     );
 
-    return otherUsers.length > 0 ? otherUsers[0] : null;
+    return otherUsers.length > 0 ? otherUsers[0].id : null;
   };
 
-  const handleUserSelect = (userId, chat) => {
+  const handleUserSelect = (chatId, chat) => {
     const isBot = chat.name === "COMY オフィシャル AI";
-
-    setChats(prev =>
-      prev.map(c =>
-        c.id === chat.id
-          ? { ...c, unReadMessage: false }
-          : c
-      )
+    const newChants = chats.map(c =>
+      c.id === chat.id
+        ? { ...c, unReadMessage: false }
+        : c
     );
+    setChats(newChants);
+    console.log("chats", newChants)
 
     const chatInfo = {
       ...chat,
@@ -132,7 +136,7 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
       setSelectedSenderId(null);
     }
 
-    onSelectUser(userId, chatInfo);
+    onSelectUser(chatId, chatInfo);
   };
 
   useEffect(() => {
@@ -145,9 +149,9 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
 
   return (
     <aside className="sidebarV2">
-      {chats.map((chat, index) => {
+      {chats.map((chat) => {
         const isBot = chat.name === 'COMY オフィシャル AI';
-        const isFirstBot = index === 0 && isBot;
+        // const showBotNotification = isBot;
 
         return (
           <div
@@ -156,7 +160,7 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
             onClick={() => handleUserSelect(chat.id, chat)}
           >
             <div className="avatarContainerV2">
-              {isFirstBot ? (
+              {isBot ? (
                 <img src={botImage} alt="Bot" className="userAvatar" />
               ) : (
                 <>
@@ -180,7 +184,6 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
               <p className="previewTextV2">{chat.latestMessage}</p>
             </div>
             {chat.unReadMessage && <div className="notificationDotV2" />}
-
           </div>
         );
       })}
