@@ -24,11 +24,11 @@ const ChatMain = ({
   const [currentUser, setCurrentUser] = useState([]);
   // console.log(currentSystemUser)
 
-  useEffect(() => {
-    if (socket && selectedChatId) {
-      socket.emit('joinChat', selectedChatId);
-    }
-  }, [socket, selectedChatId]);
+  // useEffect(() => {
+  //   if (socket && selectedChatId) {
+  //     socket.emit('joinChat', selectedChatId);
+  //   }
+  // }, [socket, selectedChatId]);
 
   useEffect(() => {
     if (!selectedChatId) return;
@@ -37,6 +37,7 @@ const ChatMain = ({
       try {
         const response = await secureApi.get(`/api/chats/${selectedChatId}/messages`);
         const allMessages = response.data;
+        console.log("sssssss", allMessages)
 
         const matchCards = allMessages
           .filter(m => m.isMatchCard)
@@ -57,7 +58,7 @@ const ChatMain = ({
               chatId: selectedChatId,
               isResponded: wasResponded,
               apiType: m.content.includes("マッチの希望が届いています") ? "match" : "suggestion",
-              suggestedUserName: m.suggestedUserName,             
+              suggestedUserName: m.suggestedUserName,
               suggestedUserCategory: m.suggestedUserCategory,
               status: m.status || 'pending',
               isSuggested: m.isSuggested || false
@@ -78,7 +79,7 @@ const ChatMain = ({
             const isCurrentUser =
               isUserMatchResponse ||
               (currentSystemUser?.userId === senderId && !isBot);
-              console.log(m)
+            console.log(m)
 
             return {
               id: m.id,
@@ -87,7 +88,8 @@ const ChatMain = ({
               text: m.content,
               timestamp: new Date(m.createdAt).toLocaleTimeString([], {
                 hour: "2-digit",
-                minute: "2-digit"
+                minute: "2-digit",
+                hour12: false
               }),
               rawTimestamp: m.createdAt,
               isUser: isCurrentUser,
@@ -96,7 +98,7 @@ const ChatMain = ({
             };
           });
 
-          console.log(otherMessages)
+        console.log("otherMessages", otherMessages)
         setCurrentUser(matchCards);
         setMessages(otherMessages);
       } catch (error) {
@@ -177,11 +179,12 @@ const ChatMain = ({
           text: msg.content,
           timestamp: new Date(msg.createdAt).toLocaleTimeString([], {
             hour: "2-digit",
-            minute: "2-digit"
+            minute: "2-digit",
+            hour12: false
           }),
           rawTimestamp: msg.createdAt,
           isUser: msg.senderId === currentSystemUser?.userId,
-          profileImageUrl:isBot ? botImage : msg.senderProfileImageUrl ? msg.senderProfileImageUrl : "/images/profileImage.png",
+          profileImageUrl: isBot ? botImage : msg.senderProfileImageUrl ? msg.senderProfileImageUrl : "/images/profileImage.png",
           isMatchCard: false
         };
 
@@ -193,40 +196,40 @@ const ChatMain = ({
     return () => socket.off('newMessage', handleNewMessage);
   }, [socket, selectedChatId, currentSystemUser]);
 
- 
-const handleSendMessage = async (text) => {
-  if (!socket || !text.trim()) return;
-  const messageData = {
-    chatId: selectedChatId,
-    content: text.trim(),
-    senderId: currentSystemUser?.userId,
-    // senderName: currentSystemUser.name,
-    timestamp: new Date().toISOString()
-  };
 
-  try {
-    // Send message via socket
-    socket.emit('sendMessage', messageData);
-    console.log("Message emitted successfully");
-
-    // Emit typing status
-    socket.emit('typing', {
+  const handleSendMessage = async (text) => {
+    if (!socket || !text.trim()) return;
+    const messageData = {
       chatId: selectedChatId,
-      userId: currentSystemUser?.userId
-    });
+      content: text.trim(),
+      senderId: currentSystemUser?.userId,
+      // senderName: currentSystemUser.name,
+      timestamp: new Date().toISOString()
+    };
 
-    // Stop typing after delay
-    setTimeout(() => {
-      socket.emit('stopTyping', {
+    try {
+      // Send message via socket
+      socket.emit('sendMessage', messageData);
+      console.log("Message emitted successfully");
+
+      // Emit typing status
+      socket.emit('typing', {
         chatId: selectedChatId,
         userId: currentSystemUser?.userId
       });
-    }, 1000);
 
-  } catch (error) {
-    console.error("Error sending message:", error);
-  }
-};
+      // Stop typing after delay
+      setTimeout(() => {
+        socket.emit('stopTyping', {
+          chatId: selectedChatId,
+          userId: currentSystemUser?.userId
+        });
+      }, 1000);
+
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
 
   const isBotChat = chatInfo?.name === "COMY オフィシャル AI";
 
@@ -259,13 +262,13 @@ const handleSendMessage = async (text) => {
                 setMessages((prev) => [...prev, msg]);
               }}
             />
-              <MessageInput
-                onSendMessage={handleSendMessage}
-                socket={socket}
-                selectedChatId={selectedChatId}
-                isDisabled={isBotChat}
-              />
-            </div>
+            <MessageInput
+              onSendMessage={handleSendMessage}
+              socket={socket}
+              selectedChatId={selectedChatId}
+              isDisabled={isBotChat}
+            />
+          </div>
         </>
       ) : (
         <EmptyState message="Please select a user" />

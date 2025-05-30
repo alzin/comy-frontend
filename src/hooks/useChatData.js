@@ -3,7 +3,7 @@ import { getMemberList } from "../api/memberList";
 import { getUserSheetById } from "../api/businessSheet";
 
 const useChatData = (selectedUserId) => {
-  console.log(selectedUserId)
+  // console.log("ccc", selectedUserId)
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [errorUsers, setErrorUsers] = useState(null);
@@ -38,7 +38,7 @@ const useChatData = (selectedUserId) => {
       });
   }, []);
 
-    console.log(selectedUserId)
+  console.log(selectedUserId)
 
   useEffect(() => {
     if (selectedUserId) {
@@ -46,7 +46,7 @@ const useChatData = (selectedUserId) => {
       setErrorSheet(null);
       setSelectedUserSheetData(null);
 
-      getUserSheetById(selectedUserId)
+      getUserSheetById(selectedUserId.id)
         .then(response => {
           if (response.data) {
             let finalData = { ...response.data };
