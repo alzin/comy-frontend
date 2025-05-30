@@ -37,6 +37,8 @@ const ChatMain = ({
       try {
         const response = await secureApi.get(`/api/chats/${selectedChatId}/messages`);
         const allMessages = response.data;
+        console.log("allMessages", allMessages);
+
 
         const sortedMessages = [...allMessages].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -61,7 +63,8 @@ const ChatMain = ({
               suggestedUserCategory: m.suggestedUserCategory,
               status: m.status || 'pending',
               isSuggested: m.isSuggested || false,
-              relatedUserId: m.relatedUserId
+              relatedUserId: m.relatedUserId,
+              createdAt: m.createdAt
             });
           } else {
             const isBot = m.senderName === "COMY オフィシャル AI";

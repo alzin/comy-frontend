@@ -9,6 +9,7 @@ const MessageList = ({ messages, isTyping, currentUser, onAddMessage }) => {
   const lastMessageRef = useRef(null);
   useEffect(() => {
     // 👇️ scroll to bottom every time messages change
+    console.log("currentUser", currentUser)
     lastMessageRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   return (
@@ -19,7 +20,7 @@ const MessageList = ({ messages, isTyping, currentUser, onAddMessage }) => {
           message={{
             sender: "COMY オフィシャル AI",
             senderId: "system",
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date(user.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
             isUser: false,
             profileImageUrl: botImage,
             isMatchCard: true,
