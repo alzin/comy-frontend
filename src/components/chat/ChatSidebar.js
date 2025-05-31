@@ -8,7 +8,6 @@ import { API_URL } from '../../utils/apiUtils';
 const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSelectedSenderId }) => {
   const socket = useContext(SocketContext);
   const [chats, setChats] = useState([]);
-  const [now, setNow] = useState(new Date());
   const [botId, setBotId] = useState(null);
 
   useEffect(() => {
@@ -16,7 +15,7 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
       try {
         const res = await axios.get(`${API_URL}/api/chats`, { withCredentials: true });
         const allChats = res.data;
-        // console.log('Fetched chats:', allChats);
+        console.log('Fetched chats:', allChats);
 
         const getBotId = () => {
           const botChat = allChats.find(chat => chat.name === "COMY オフィシャル AI");
@@ -39,10 +38,10 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
             id: chat.id,
             name: chat.name || 'Private Chat',
             users: chat.users,
-            latestMessage: chat.latestMessage?.content || 'メッセージはありません ',
+            latestMessage: chat?.latestMessage?.content || 'メッセージはありません ',
             latestTime: chat.latestMessage?.createdAt || chat.updatedAt,
             profileImageUrl: otherUser?.image || '',
-            unReadMessage: chat.id === selectedChatId ? false : !chat.latestMessage?.readBy.includes(currentSystemUserId)
+            unReadMessage: chat.id === selectedChatId ? false : (chat.latestMessage && !chat.latestMessage?.readBy.includes(currentSystemUserId))
 
           };
         });
@@ -57,19 +56,14 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
   }, [currentSystemUserId]);
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     if (!socket) return;
 
     const handleMessageUpdate = (message) => {
       const { chatId, content, createdAt, readBy } = message;
-      console.log('chatId', chatId);
-      console.log('selectedChatId', selectedChatId);
 
       console.log('Received :', chatId === selectedChatId ? false : !readBy.includes(currentSystemUserId));
+      console.log('Message ', message);
+
       setChats(prev =>
         prev.map(chat =>
           chat.id === chatId
@@ -95,7 +89,7 @@ const ChatSidebar = ({ onSelectUser, selectedChatId, currentSystemUserId, setSel
   }, [socket, selectedChatId, currentSystemUserId]);
 
   const formatTime = (timeString) => {
-    if (!timeString) return '';
+    if (!timeString) return;
     const date = new Date(timeString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   };
