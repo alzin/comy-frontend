@@ -152,7 +152,8 @@ const ChatMain = ({
           suggestedUserCategory: msg.suggestedUserCategory || "N/A",
           status: msg.status || 'pending',
           isSuggested: msg.isSuggested || false,
-          relatedUserId: msg.relatedUserId
+          relatedUserId: msg.relatedUserId,
+          createdAt: msg.createdAt
         };
 
         if (card.relatedUserId) {
@@ -194,6 +195,13 @@ const ChatMain = ({
         );
         return updatedMessages;
       });
+
+      console.log({ messageId: msg.id, userId: currentSystemUser?.userId })
+
+      if (msg.id && currentSystemUser?.userId) {
+        socket.emit('messageRead', { messageId: msg.id, userId: currentSystemUser?.userId });
+      }
+
     };
 
     socket.on('newMessage', handleNewMessage);
